@@ -1,4 +1,12 @@
 #include "systemcalls.h"
+#include <stdlib.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <errno.h>
+#include <string.h>
+#include <stdio.h>
+#include <fcntl.h>
 
 /**
  * @param cmd the command to execute with system()
@@ -16,8 +24,10 @@ bool do_system(const char *cmd)
  *   and return a boolean true if the system() call completed with success
  *   or false() if it returned a failure
 */
+    if (system(cmd) == 0)
+        return true;
 
-    return true;
+    return false;
 }
 
 /**
@@ -58,6 +68,51 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *
 */
+    /*
+    // false
+    do_exec(2, "echo", "Testing execv implementation with echo");
+    // false
+    do_exec(3, "/usr/bin/test","-f","echo");
+    // true
+    do_exec(3, "/usr/bin/test","-f","/bin/echo");
+    */
+
+
+    // returns 0 in the child, returns the childs pid in the parent
+    fflush(stdout);
+    pid_t pid = fork();
+    if (pid == 0)
+    {
+        // call execv here
+        printf("Command 0 is: %s\n", command[0]);
+        execv(command[0], command);
+        
+        // Execv does only return if something went wrong.
+        //printf("Still here\n");
+        exit(EXIT_FAILURE);
+    }
+    else
+    {
+        // in the main process
+        // pid is the pid of the child process
+        int status;
+        // pid_t new_pid = waitpid(pid, &status, WUNTRACED);
+        waitpid(pid, &status, WUNTRACED);
+        //printf(strerror(errno));
+        printf("Exit status: %d\n", status);
+
+        if (WIFEXITED(status) && WEXITSTATUS(status) == 0){
+            va_end(args);
+            return true;
+        }
+        else{
+            printf("Execv failed with status: %d\n", WEXITSTATUS(status));
+            va_end(args);
+            return false;
+        }
+        
+        return false;
+    }
 
     va_end(args);
 
@@ -93,7 +148,65 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *
 */
 
+    int fd = open(outputfile, O_WRONLY | O_TRUNC | O_CREAT, 0644);
+
+    fflush(stdout);
+    pid_t pid = fork();
+    if (pid == 0)
+    {
+        // duplicate file descriptor
+        // file descriptor "1" (second argument) is stdout
+        dup2(fd, 1);
+        close(fd);
+
+        // call execv here
+        //printf("Command 0 is: %s\n", command[0]);
+        execv(command[0], command);
+        
+        // Execv does only return if something went wrong.
+        //printf("Still here\n");
+        exit(EXIT_FAILURE);
+    }
+    else
+    {
+        close(fd);
+        // in the main process
+        // pid is the pid of the child process
+        int status;
+        // pid_t new_pid = waitpid(pid, &status, WUNTRACED);
+        waitpid(pid, &status, WUNTRACED);
+        //printf(strerror(errno));
+        printf("Exit status: %d\n", status);
+
+        if (WIFEXITED(status) && WEXITSTATUS(status) == 0){
+            va_end(args);
+            return true;
+        }
+        else{
+            printf("Execv failed with status: %d\n", WEXITSTATUS(status));
+            va_end(args);
+            return false;
+        }
+        
+        return false;
+    }
+
+    va_end(args);
+
     va_end(args);
 
     return true;
 }
+
+/*
+int main(){
+    fflush(stdout);
+    // false
+    bool test1 = do_exec(2, "echo", "Testing execv implementation with echo");
+    // false
+    bool test2 = do_exec(3, "/usr/bin/test","-f","echo");
+    // true
+    bool test3 = do_exec(3, "/usr/bin/test","-f","/bin/echo");
+    fflush(stdout);
+}
+*/
